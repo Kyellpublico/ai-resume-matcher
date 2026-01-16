@@ -1,18 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 import shutil
 import os
 import sys
+import uuid
 
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Import Logic
 from src.ingestion import parse_resume
 from src.utils import chunk_markdown
-from src.vector_store import add_resume_to_db, query_resume
+# Note: We updated these functions in Part 1 to accept collection_name
+from src.vector_store import add_resume_to_db, query_resume 
 from src.llm_engine import get_llm_response
-
-# Import Schemas (The new part!)
 from .schemas import AnalyzeRequest, IngestResponse, AnalyzeResponse
 
 app = FastAPI(title="AI Resume Matcher API")
@@ -22,10 +21,17 @@ def home():
     return {"message": "AI Resume Matcher API is running"}
 
 @app.post("/ingest", response_model=IngestResponse)
-async def ingest_resume(file: UploadFile = File(...)):
+async def ingest_resume(
+    file: UploadFile = File(...), 
+    session_id: str = Form(None) # <--- Accept session_id as form data (Optional)
+):
     """
-    Uploads a PDF, parses it, chunks it, and saves to ChromaDB.
+    Uploads a PDF. If no session_id is provided, generates a new one.
     """
+    # 1. Generate Session ID if missing
+    if not session_id:
+        session_id = f"session_{uuid.uuid4()}"
+    
     temp_filename = f"data/{file.filename}"
     os.makedirs("data", exist_ok=True)
     
@@ -38,27 +44,38 @@ async def ingest_resume(file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Failed to parse PDF")
             
         chunks = chunk_markdown(data['content'])
-        add_resume_to_db(chunks, data['filename'])
+        
+        # 2. Store in User-Specific Collection
+        add_resume_to_db(chunks, data['filename'], collection_name=session_id)
         
         return IngestResponse(
             filename=file.filename,
             chunks_added=len(chunks),
-            status="Success"
+            status="Success",
+            session_id=session_id  # Return ID so client can use it next time
         )
     finally:
-        # Always clean up, even if error occurs
         if os.path.exists(temp_filename):
             os.remove(temp_filename)
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_match(request: AnalyzeRequest):
     """
-    Accepts a Job Description, retrieves resume context, and gets LLM feedback.
+    Analyzes match based on the specific session_id provided.
     """
-    results = query_resume(request.job_description, n_results=5)
+    # 1. Query the Specific User's Collection
+    results = query_resume(
+        request.job_description, 
+        collection_name=request.session_id,  # <--- Use the session_id from request
+        n_results=5
+    )
     
+    # Check if we found anything (if list is empty or first element is empty)
     if not results['documents'] or not results['documents'][0]:
-        raise HTTPException(status_code=404, detail="No resume data found. Please upload a resume first.")
+        raise HTTPException(
+            status_code=404, 
+            detail=f"No resume data found for session ID: {request.session_id}"
+        )
 
     context_text = "\n\n".join(results['documents'][0])
     
@@ -66,5 +83,5 @@ async def analyze_match(request: AnalyzeRequest):
     
     return AnalyzeResponse(
         match_analysis=llm_response,
-        context_used=context_text[:500] + "..." # Limit preview size
+        context_used=context_text[:500] + "..."
     )
