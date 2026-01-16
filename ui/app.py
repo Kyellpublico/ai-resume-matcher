@@ -3,6 +3,7 @@ import os
 import tempfile
 import sys
 import uuid
+import re  # Added for robust score extraction
 
 # Add the project root to the path so we can import from src
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -13,13 +14,16 @@ from src.vector_store import add_resume_to_db, query_resume
 from src.llm_engine import get_llm_response
 
 # 1. Page Configuration
-st.set_page_config(page_title="AI Resume Matcher", layout="wide")
+st.set_page_config(page_title="MatchMind AI", page_icon="🎯", layout="wide")
 
-st.title("🚀 AI Resume Analyzer & Job Matcher")
-st.markdown("### Build for free using Open Source Models (Qwen/Llama)")
+# Catchy Title & Design
+st.title("🎯 MatchMind AI")
+st.subheader("Precision Career Alignment Engine")
+# ADDED: Powered by note in header
+st.caption("🚀 Intelligence powered by **Qwen 2.5 (72B Instruct)**")
+st.markdown("---")
 
-# 2. Session Management (Multi-User Support)
-# We generate a unique ID for every user so their data stays private
+# 2. Session Management
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"session_{uuid.uuid4()}"
 
@@ -27,11 +31,12 @@ session_id = st.session_state.session_id
 
 # --- Sidebar: Configuration ---
 with st.sidebar:
-    st.header("1. Upload Resume")
+    st.header("📂 Data Ingestion")
     uploaded_file = st.file_uploader("Upload your PDF Resume", type=["pdf"])
     
-    st.info(f"Session ID: {session_id}")
-    st.markdown("*Data is isolated to this session.*")
+    st.divider()
+    st.info(f"**Session ID:** \n`{session_id}`")
+    st.caption("Your data is isolated and will be cleared when the session ends.")
 
 # --- Main Logic ---
 if uploaded_file is not None:
@@ -40,20 +45,18 @@ if uploaded_file is not None:
         tmp_file.write(uploaded_file.read())
         tmp_path = tmp_file.name
 
-    # 4. Process Resume (Only if not already processed for this session)
-    # We check if the file name matches to avoid re-parsing the same file
+    # 4. Process Resume
     if "current_file" not in st.session_state or st.session_state.current_file != uploaded_file.name:
-        with st.spinner("Parsing Resume (Docling)..."):
+        with st.spinner("🧠 Parsing Resume Structure..."):
             data = parse_resume(tmp_path)
             
             if data:
                 st.session_state["resume_text"] = data["content"]
                 st.session_state["current_file"] = uploaded_file.name
                 
-                # Chunk & Store in User-Specific Collection
                 chunks = chunk_markdown(data["content"])
                 add_resume_to_db(chunks, data["filename"], collection_name=session_id)
-                st.success(f"Resume processed! ({len(chunks)} chunks stored)")
+                st.success(f"✅ {uploaded_file.name} indexed successfully!")
             else:
                 st.error("Failed to parse resume.")
 
@@ -62,19 +65,16 @@ if uploaded_file is not None:
         st.markdown(st.session_state.get("resume_text", ""))
 
     # --- Job Matching Section ---
-    st.divider()
-    st.header("2. Paste Job Description")
-    job_description = st.text_area("Paste the JD here...", height=200)
+    st.header("📝 Analyze Career Alignment")
+    job_description = st.text_area("Paste the Job Description (JD) here:", height=250, placeholder="Example: We are looking for a Senior AI Engineer...")
 
-    if st.button("Analyze Match"):
+    if st.button("🚀 Run Match Analysis"):
         if not job_description:
             st.warning("Please paste a Job Description first.")
         else:
-            with st.spinner("🔍 Retrieving relevant experience..."):
-                # RAG Step 1: Get Context from User's specific collection
+            with st.spinner("🔍 Retrieving relevant context from your resume..."):
                 results = query_resume(job_description, collection_name=session_id, n_results=5)
                 
-                # Check if we actually found data
                 if not results['documents'] or not results['documents'][0]:
                     st.error("No resume data found! Please upload a resume first.")
                     context_text = ""
@@ -82,21 +82,50 @@ if uploaded_file is not None:
                     context_text = "\n\n".join(results['documents'][0])
             
             if context_text:
-                with st.spinner("🤖 AI Critiquing (Qwen-72B)..."):
-                    # RAG Step 2: Ask LLM
+                with st.spinner("🤖 AI Recruiter is evaluating..."):
                     response = get_llm_response(context_text, job_description)
                     
-                    # Display Result
-                    st.subheader("Analysis Result")
+                    # --- NEW DESIGN ELEMENTS START HERE ---
+                    st.markdown("---")
+                    
+                    # 1. Extract Score for the Gauge
+                    score_val = 0
+                    try:
+                        # Looks for "Match Score: 85" or "85/100"
+                        match = re.search(r"Match Score:\s*(\d+)", response)
+                        if match:
+                            score_val = int(match.group(1))
+                        else:
+                            # Fallback: find any number followed by /100
+                            match_alt = re.search(r"(\d+)/100", response)
+                            if match_alt:
+                                score_val = int(match_alt.group(1))
+                    except:
+                        score_val = 0
+
+                    # 2. Display Metrics & Progress Bar
+                    col_score, col_filler = st.columns([1, 2])
+                    with col_score:
+                        st.metric(label="Match Confidence", value=f"{score_val}%")
+                    
+                    st.progress(score_val / 100)
+                    
+                    # 3. Display the Full Report
+                    st.subheader("📊 Comprehensive Analysis")
                     st.markdown(response)
                     
-                    # Debug: Show what context was sent to LLM
-                    with st.expander("See what the AI read (RAG Context)"):
-                        st.info(context_text)
+                    # 4. Context Expander
+                    with st.expander("🛠 View RAG Source Context"):
+                        st.info("The AI based its decision on these specific parts of your resume:")
+                        st.write(context_text)
+                    # --- NEW DESIGN ELEMENTS END HERE ---
 
 else:
-    st.info("Please upload a PDF resume to start.")
+    st.info("👋 Welcome! Please upload your resume in the sidebar to begin.")
 
-# Cleanup temp file
-if 'tmp_path' in locals() and os.path.exists(tmp_path):
-    os.remove(tmp_path)
+# Cleanup temp file (Windows fix)
+try:
+    if 'tmp_path' in locals() and os.path.exists(tmp_path):
+        os.remove(tmp_path)
+except PermissionError:
+    pass
