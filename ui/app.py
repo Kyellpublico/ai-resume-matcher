@@ -14,7 +14,7 @@ from src.vector_store import add_resume_to_db, query_resume
 from src.llm_engine import get_llm_response
 
 # 1. Page Configuration
-st.set_page_config(page_title="MatchMind AI", page_icon="🎯", layout="wide")
+st.set_page_config(page_title="AlignIQ AI", page_icon="🎯", layout="wide")
 
 # Catchy Title & Design
 st.title("🎯 AlignIQ AI")
