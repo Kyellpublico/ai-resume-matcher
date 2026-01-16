@@ -17,7 +17,7 @@ from src.llm_engine import get_llm_response
 st.set_page_config(page_title="MatchMind AI", page_icon="🎯", layout="wide")
 
 # Catchy Title & Design
-st.title("🎯 MatchMind AI")
+st.title("🎯 AlignIQ AI")
 st.subheader("Precision Career Alignment Engine")
 # ADDED: Powered by note in header
 st.caption("🚀 Intelligence powered by **Qwen 2.5 (72B Instruct)**")

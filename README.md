@@ -1,4 +1,4 @@
-# 🎯MatchMind AI
+# 🎯AlignIQ AI
 
 A professional **RAG (Retrieval-Augmented Generation)** application that helps job seekers tailor their resumes to specific job descriptions. 
 
