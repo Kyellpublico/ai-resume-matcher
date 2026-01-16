@@ -7,3 +7,6 @@ pandas
 ipykernel
 huggingface_hub
 streamlit
+fastapi
+uvicorn
+python-multipart
