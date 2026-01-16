@@ -5,3 +5,5 @@ sentence-transformers
 python-dotenv
 pandas
 ipykernel
+huggingface_hub
+streamlit
