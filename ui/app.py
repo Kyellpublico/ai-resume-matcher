@@ -27,6 +27,10 @@ st.markdown("---")
 if "session_id" not in st.session_state:
     st.session_state.session_id = f"session_{uuid.uuid4()}"
 
+# --- BUG FIX: Initialize a specific collection ID variable ---
+if "collection_id" not in st.session_state:
+    st.session_state.collection_id = st.session_state.session_id
+
 session_id = st.session_state.session_id
 
 # --- Sidebar: Configuration ---
@@ -48,6 +52,13 @@ if uploaded_file is not None:
     # 4. Process Resume
     if "current_file" not in st.session_state or st.session_state.current_file != uploaded_file.name:
         with st.spinner("🧠 Parsing Resume Structure..."):
+            
+            # --- BUG FIX START: Generate a FRESH ID for this specific file ---
+            # This ensures we don't mix data from the previous upload
+            unique_collection_id = f"{session_id}_{uuid.uuid4().hex[:8]}"
+            st.session_state.collection_id = unique_collection_id
+            # ---------------------------------------------------------------
+            
             data = parse_resume(tmp_path)
             
             if data:
@@ -55,7 +66,10 @@ if uploaded_file is not None:
                 st.session_state["current_file"] = uploaded_file.name
                 
                 chunks = chunk_markdown(data["content"])
-                add_resume_to_db(chunks, data["filename"], collection_name=session_id)
+                
+                # Use the UNIQUE collection ID, not just the generic session ID
+                add_resume_to_db(chunks, data["filename"], collection_name=st.session_state.collection_id)
+                
                 st.success(f"✅ {uploaded_file.name} indexed successfully!")
             else:
                 st.error("Failed to parse resume.")
@@ -73,7 +87,8 @@ if uploaded_file is not None:
             st.warning("Please paste a Job Description first.")
         else:
             with st.spinner("🔍 Retrieving relevant context from your resume..."):
-                results = query_resume(job_description, collection_name=session_id, n_results=5)
+                # --- BUG FIX: Query the specific collection ID ---
+                results = query_resume(job_description, collection_name=st.session_state.collection_id, n_results=20)
                 
                 if not results['documents'] or not results['documents'][0]:
                     st.error("No resume data found! Please upload a resume first.")
