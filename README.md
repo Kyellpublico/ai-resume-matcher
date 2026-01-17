@@ -99,7 +99,7 @@ uvicorn api.main:app --reload
 ## 🧪 Usage Workflow
 1. **Upload Resume:** Upload your PDF resume. The system parses and indexes it into ChromaDB.
 2. **Paste Job Description:** Find a job posting you are interested in.
-3. **Get AnalyGet Analysis:** The AI will generate:sis: The AI will generate:
+3. **Get AnalyGet Analysis:** The AI will generate:
     - **Match Score (0-100)**
     - **Gap Analysis** (Missing Skills)
     - **Tailoring Advice** (How to fix your resume)
